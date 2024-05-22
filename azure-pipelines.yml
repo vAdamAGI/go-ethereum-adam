@@ -1,0 +1,51 @@
+# Go
+# Build your Go project.
+# Add steps that test, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/go
+
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  GOBIN: '$(GOPATH)/bin'
+  GOROOT: '/usr/local/go'
+  GOPATH: '$(system.defaultWorkingDirectory)/gopath'
+  modulePath: '$(GOPATH)/src/github.com/$(build.repository.name)'
+
+steps:
+- script: |
+    mkdir -p '$(GOBIN)'
+    mkdir -p '$(GOPATH)/pkg'
+    mkdir -p '$(modulePath)'
+    shopt -s extglob
+    shopt -s dotglob
+    mv !(gopath) '$(modulePath)'
+    echo '##vso[task.prependpath]$(GOBIN)'
+    echo '##vso[task.prependpath]$(GOROOT)/bin'
+  displayName: 'Set up the Go workspace'
+
+- script: |
+    wget https://dl.google.com/go/go1.16.4.linux-amd64.tar.gz
+    sudo tar -C /usr/local -xzf go1.16.4.linux-amd64.tar.gz
+    export PATH=$PATH:/usr/local/go/bin
+  displayName: 'Install Go 1.16.4'
+
+- script: |
+    go version
+    go get -v -t -d ./...
+    make geth
+  workingDirectory: '$(modulePath)'
+  displayName: 'Get dependencies and build'
+
+- task: CopyFiles@2
+  inputs:
+    contents: '$(modulePath)/build/bin/geth'
+    targetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'geth'
